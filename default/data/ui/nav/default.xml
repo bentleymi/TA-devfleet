@@ -1,0 +1,7 @@
+<application>
+  <nav>
+    <view name="devfleet_overview" />
+    <view name="devfleet_metrics" />
+    <search label="TA-devfleet Events" search="search index=main sourcetype=devfleet:status" />
+  </nav>
+</application>

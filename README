@@ -1,0 +1,53 @@
+TA-devfleet
+====
+
+Collects a PCI/USB device inventory signature (count + MD5 of the sorted device list via lspci/lsusb) and reports new or removed devices versus the previous cycle using a local state file. Emits JSON events to index=main (sourcetype devfleet:status) and devfleet.* metrics (device counts, delta count) to index=metrics (sourcetype devfleet:metrics) hourly, with dashboards.
+
+Prerequisites
+-------------
+  * pciutils (lspci) and usbutils (lsusb) for full inventory; counts still reported when one is missing
+  * Splunk Enterprise or Universal Forwarder 9.x - 10.6 (forwarder recommended
+    on monitored hosts).
+  * A metrics-typed index (default name: metrics) on the indexer:
+
+      [metrics]
+      datatype = metric
+
+    Forwarders only need that index to exist on the indexer side.
+  * No network egress, no root requirement beyond the Splunk service account.
+    Fully standalone add-on with no dependencies.
+
+Install
+-------
+Install on each monitored host (Apps > Install app from file, splunk install
+app, or deployment server), restart Splunk, then verify:
+
+  index=main sourcetype="devfleet:status" | head
+
+Search quick reference
+----------------------
+  index=main sourcetype="devfleet:status" | head
+  | mcatalog values(metric_name) where index=metrics metric_name="devfleet.*" by host
+  | mstats avg("devfleet.*") where index=metrics span=60s by host
+
+Usage
+-----
+Events: index=main sourcetype=devfleet:status  (pci_count, usb_count, signature, new_devices, removed_devices)
+Metrics: devfleet.pci_count, devfleet.usb_count, devfleet.device_delta on index=metrics
+Dashboards: TA-Devfleet > Devfleet Overview / Devfleet Metrics
+
+Configure
+---------
+Override the interval or destination index in etc/apps/TA-devfleet/local/inputs.conf
+(never edit default/).
+
+Troubleshooting
+---------------
+  * First run after install establishes the baseline (delta 0).
+  * State file lives under /var/tmp; lost state causes one false delta.
+
+License
+-------
+SOURCE-AVAILABLE (see LICENSE) - free personal, educational and evaluation
+use; commercial or production use requires a paid license from BentleyPC
+LLC (https://www.bentleypc.com).
