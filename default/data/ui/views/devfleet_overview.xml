@@ -3,43 +3,86 @@
   <description>Collects a PCI/USB device inventory signature (count + MD5 of the sorted device list via lspci/lsusb) and reports new or removed devices versus the previous cycle using a local</description>
   <row>
     <panel>
-      <title>Hosts Reporting (latest)</title>
+      <title>PCI devices (per host, latest)</title>
+      <single>
+        <search>
+          <query>| mstats avg("devfleet.pci_count") as value where index=metrics span=5m
+| fields - _time | tail 1</query>
+          <done/>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <title>USB devices (per host, latest)</title>
+      <single>
+        <search>
+          <query>| mstats avg("devfleet.usb_count") as value where index=metrics span=5m
+| fields - _time | tail 1</query>
+          <done/>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <title>Device delta (fleet, latest)</title>
+      <single>
+        <search>
+          <query>index=main sourcetype="devfleet:status"
+| eventstats latest(_time) as lt by host
+| dedup host lt
+| spath input=_raw output=n path=device_delta
+| stats sum(n) as value</query>
+          <done/>
+        </search>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Newly seen devices (since last cycle)</title>
       <table>
         <search>
           <query>index=main sourcetype="devfleet:status"
-| stats latest(_time) as "Last seen", count as Reports by host
-| table host "Last seen" Reports</query>
+| dedup host
+| spath input=_raw output=x path=new_devices{}
+| mvexpand x
+| rename x as "device"
+| table host "device"</query>
           <done/>
         </search>
+        <option name="count">50</option>
         <option name="drilldown">none</option>
       </table>
     </panel>
   </row>
   <row>
     <panel>
-      <title>Distinct devfleet.* Metrics (last hour)</title>
-      <single>
+      <title>Removed devices (since last cycle)</title>
+      <table>
         <search>
-          <query>| mcatalog values(metric_name) as m where index=metrics metric_name="devfleet.*"
-| eval count=mvcount(m)</query>
+          <query>index=main sourcetype="devfleet:status"
+| dedup host
+| spath input=_raw output=x path=removed_devices{}
+| mvexpand x
+| rename x as "device"
+| table host "device"</query>
           <done/>
         </search>
-        <option name="underLabel">devfleet.* metrics streaming</option>
-      </single>
+        <option name="count">50</option>
+        <option name="drilldown">none</option>
+      </table>
     </panel>
   </row>
   <row>
     <panel>
-      <title>Issues (newest first)</title>
+      <title>Device signatures (latest per host)</title>
       <table>
         <search>
-          <query>index=main sourcetype="devfleet:status" _raw="*alarm*"
-| sort - _time
-| table _time host _raw
-| rename _raw as Event
-| head 200</query>
+          <query>index=main sourcetype="devfleet:status"
+| dedup host
+| table host pci_count usb_count pci_signature usb_signature</query>
           <done/>
         </search>
+        <option name="count">50</option>
         <option name="drilldown">none</option>
       </table>
     </panel>
