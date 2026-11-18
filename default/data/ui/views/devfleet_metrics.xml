@@ -6,7 +6,7 @@
       <title>All devfleet.* series (PCI / USB counts, device delta)</title>
       <chart>
         <search>
-          <query>| mstats avg("devfleet.*") as "v*" where index=metrics by metric_name span=5m
+          <query>| mstats avg("devfleet.*") as "v*" where index=metrics by metric_name, host span=5m
 | rename v* as "devfleet.*"</query>
           <done/>
         </search>

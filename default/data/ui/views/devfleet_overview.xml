@@ -3,7 +3,7 @@
   <description>Collects a PCI/USB device inventory signature (count + MD5 of the sorted device list via lspci/lsusb) and reports new or removed devices versus the previous cycle using a local</description>
   <row>
     <panel>
-      <title>PCI devices (per host, latest)</title>
+      <title>PCI devices (fleet, latest)</title>
       <single>
         <search>
           <query>| mstats avg("devfleet.pci_count") as value where index=metrics span=5m
@@ -13,7 +13,7 @@
       </single>
     </panel>
     <panel>
-      <title>USB devices (per host, latest)</title>
+      <title>USB devices (fleet, latest)</title>
       <single>
         <search>
           <query>| mstats avg("devfleet.usb_count") as value where index=metrics span=5m
@@ -38,12 +38,13 @@
   </row>
   <row>
     <panel>
-      <title>Newly seen devices (since last cycle)</title>
+      <title>Newly seen devices (appears when inventory changed)</title>
+      <description>Rows appear only on cycles where the device inventory changed (status=alarm).</description>
       <table>
         <search>
-          <query>index=main sourcetype="devfleet:status"
-| dedup host
+          <query>index=main sourcetype="devfleet:status" status="alarm"
 | spath input=_raw output=x path=new_devices{}
+| where isnotnull(x) AND x!=""
 | mvexpand x
 | rename x as "device"
 | table host "device"</query>
@@ -56,12 +57,13 @@
   </row>
   <row>
     <panel>
-      <title>Removed devices (since last cycle)</title>
+      <title>Removed devices (appears when inventory changed)</title>
+      <description>Rows appear only on cycles where the device inventory changed (status=alarm).</description>
       <table>
         <search>
-          <query>index=main sourcetype="devfleet:status"
-| dedup host
+          <query>index=main sourcetype="devfleet:status" status="alarm"
 | spath input=_raw output=x path=removed_devices{}
+| where isnotnull(x) AND x!=""
 | mvexpand x
 | rename x as "device"
 | table host "device"</query>

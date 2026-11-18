@@ -5,7 +5,7 @@ import os
 import subprocess
 import sys
 
-STATE_FILE = "/var/tmp/ta_devfleet_state.json"
+STATE_DIR = "/var/tmp"
 LSPCI_CANDIDATES = ("/usr/bin/lspci", "/usr/sbin/lspci")
 LSUSB_CANDIDATES = ("/usr/bin/lsusb", "/usr/sbin/lsusb")
 TOOL_TIMEOUT = 25
@@ -38,10 +38,19 @@ def _signature(lines):
     return hashlib.md5(("\n".join(lines)).encode("utf-8")).hexdigest()
 
 
-def _load_state():
+def _state_path():
+    """Per-input state file: named after the entry script's filename stem so the
+    events and metrics inputs never read each other's freshly written state."""
+    main = sys.modules.get("__main__")
+    script = getattr(main, "__file__", None) or sys.argv[0]
+    stem = os.path.splitext(os.path.basename(script))[0]
+    return os.path.join(STATE_DIR, "ta_devfleet_state.%s.json" % stem)
+
+
+def _load_state(path):
     empty = {"pci": None, "usb": None}
     try:
-        with open(STATE_FILE) as fh:
+        with open(path) as fh:
             state = json.load(fh)
     except (OSError, ValueError):
         return empty
@@ -57,18 +66,24 @@ def _load_state():
     return out
 
 
-def _save_state(data):
+def _save_state(data, path):
     payload = {
         "pci_md5": data.get("pci_signature"),
         "usb_md5": data.get("usb_signature"),
         "pci_lines": data["pci_lines"][:LINES_CAP] if data["pci_lines"] is not None else None,
         "usb_lines": data["usb_lines"][:LINES_CAP] if data["usb_lines"] is not None else None,
     }
+    tmp_path = "%s.%d.tmp" % (path, os.getpid())
     try:
-        with open(STATE_FILE, "w") as fh:
+        with open(tmp_path, "w") as fh:
             json.dump(payload, fh)
-    except OSError:
-        pass
+        os.replace(tmp_path, path)
+    except OSError as exc:
+        sys.stderr.write("TA-devfleet: could not save state file %s: %s\n" % (path, exc))
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 def _diff(current, previous):
@@ -81,12 +96,13 @@ def _diff(current, previous):
 
 
 def discover():
+    state_path = _state_path()
     pci_lines = _run_tool(LSPCI_CANDIDATES)
     usb_lines = _run_tool(LSUSB_CANDIDATES)
     pci_sig = _signature(pci_lines) if pci_lines is not None else None
     usb_sig = _signature(usb_lines) if usb_lines is not None else None
 
-    prev = _load_state()
+    prev = _load_state(state_path)
     new_pci, rem_pci = _diff(pci_lines, prev["pci"])
     new_usb, rem_usb = _diff(usb_lines, prev["usb"])
     device_delta = len(new_pci) + len(rem_pci) + len(new_usb) + len(rem_usb)
@@ -112,7 +128,7 @@ def discover():
         "removed_devices": removed_devices,
         "device_delta": device_delta,
     }
-    _save_state(data)
+    _save_state(data, state_path)
     return data
 
 
@@ -123,6 +139,7 @@ def events_payload(data):
         "usb_count": data.get("usb_count", 0),
         "new_devices": data.get("new_devices", []),
         "removed_devices": data.get("removed_devices", []),
+        "device_delta": data["device_delta"],
     }
     if data.get("pci_signature") is not None:
         payload["pci_signature"] = data["pci_signature"]
